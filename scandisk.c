@@ -74,8 +74,19 @@ void find_orphaned(uint8_t *image_buf, struct bpb33* bpb, bool *refered_sectors)
 	char filename[15] = "found";
 	char buffer[10];
 	struct direntry *dirent = (struct direntry*)root_dir_addr(image_buf, bpb);
+	bool start_cluster[bpb->bpbSectors]; //a bool array to check if a sector is the start of a chain
+	for (int i = 0; i < bpb->bpbSectors; i++){
+		start_cluster[i] = true;	
+	}
 	for (int i = CLUST_FIRST; i < bpb->bpbSectors; i++){
-		if (refered_sectors[i] == false && get_fat_entry(i, image_buf, bpb) != CLUST_FREE){
+		//If a cluster is refered by some FAT entry, it can't be the start cluster
+		uint16_t refered = get_fat_entry(i, image_buf, bpb);
+		start_cluster[refered] = false;
+	}
+	for (int i = CLUST_FIRST; i < bpb->bpbSectors; i++){
+		if (refered_sectors[i] == false && get_fat_entry(i, image_buf, bpb) != CLUST_FREE && start_cluster[i] == true){
+			//If we didn't visit this cluster while traversing the disk image 
+			//but its FAT entry is not marked free and it's not refered by any other FAT entry 
 			printf("%d\n", i);
 			sprintf(buffer, "%d", deIndex);
 			strcat(filename, buffer);
@@ -211,7 +222,6 @@ uint16_t check_dirent(struct direntry *dirent, uint8_t *image_buf, struct bpb33*
 		if (check_file_inconsistency(dirent, image_buf, bpb, refered_sectors)){
 			printf("Inconsistent\n");
 			fix_file_inconsistency(dirent, image_buf, bpb);
-			//check_file_inconsistency(dirent, image_buf, bpb);
 		}
     }
 
